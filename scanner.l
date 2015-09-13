@@ -1,9 +1,11 @@
+%option yylineno
 %{
 	#include <stdio.h>
 	#include <stdlib.h>
+	#include <string.h>
 	#include "parser.tab.h"
-
-	extern yylex(); 
+	char linebuf[500];
+	extern yylex();
 %}
 
 /*=========================================================================
@@ -24,7 +26,7 @@ str         (\\n|\\t|\\'|\\\\|\\\"|[^\\"'])
 =========================================================================*/
 
 %%
-
+\n.*		     { strncpy(linebuf, yytext+1, sizeof(linebuf)); yyless(1);}
 "class"			 { printf("CLASS\n"); return CLASS;}
 "{"				 { return LCP;  }
 "}"				 { return RCP;  }

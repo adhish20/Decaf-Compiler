@@ -4,11 +4,15 @@
 #include <string.h>
 #define YYDEBUG 1
 int errors;
+extern int yylineno;
+extern char* yytext;
+extern char linebuf[500];
 %}
 
 /*=========================================================================
 								TOKENS
 =========================================================================*/
+%locations
 %start program
 %token CLASS
 %token ID
@@ -29,7 +33,12 @@ int errors;
 %%
 
 program:
-	CLASS ID LCP field_decls statement_decls RCP
+	CLASS ID LCP declarations RCP
+	;
+
+declarations:
+	field_decls statement_decls
+	| error statement_decls
 	;
 
 field_decls:
@@ -127,13 +136,15 @@ main( int argc, char *argv[] )
 	/*yydebug = 1;*/
 	errors = 0;
 	yyparse ();
+	fprintf(stderr, "Total Errors: %d\n", errors);
 }
 /*=========================================================================
 							YYERROR
 =========================================================================*/
-yyerror(char *s) /* Called by yyparse on error */
+yyerror(char *s)
 {
 	errors++;
-	printf ("%s\n", s);
+	fprintf(stderr, "Line %d: \x1b[31m %s \x1b[0m at %s:\n \x1b[31m %s \x1b[0m \n", yylineno, s, yytext, linebuf);
 }
+
 /**************************** End Grammar File ***************************/

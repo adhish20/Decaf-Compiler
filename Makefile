@@ -3,8 +3,7 @@ all:
 	bison -vd parser.y
 	flex scanner.l
 	gcc parser.tab.c lex.yy.c -lfl -o compilerV1
-	./compilerV1 test_program > v1out.txt
-	cat v1out.txt
+	#./compilerV1 test_program > output
 
 clean: 
-	rm -rf v1out.txt
+	rm -rf output compilerV1 lex.yy.c parser.output parser.tab.c parser.tab.h
