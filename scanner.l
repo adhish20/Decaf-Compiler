@@ -6,6 +6,7 @@
 	#include "parser.tab.h"
 	char linebuf[500];
 	extern yylex();
+	extern FILE *flex_out;
 %}
 
 /*=========================================================================
@@ -27,7 +28,7 @@ str         (\\n|\\t|\\'|\\\\|\\\"|[^\\"'])
 
 %%
 \n.*		     { strncpy(linebuf, yytext+1, sizeof(linebuf)); yyless(1);}
-"class"			 { printf("CLASS\n"); return CLASS;}
+"class"			 { fprintf( flex_out,"CLASS\n"); return CLASS;}
 "{"				 { return LCP;  }
 "}"				 { return RCP;  }
 "("				 { return LRP;  }
@@ -46,9 +47,9 @@ str         (\\n|\\t|\\'|\\\\|\\\"|[^\\"'])
 "+="			 { return ADDEQ;     }
 "-="			 { return SUBTRACTEQ;}
 
-"int"          	 {printf("INT_DECLARATION\n"); return TYPE;   }
-"boolean"	     {printf("BOOLEAN_DECLARATION\n"); return TYPE;   }
-"callout"		 { printf("CALLOUT\n"); return CALLOUT;}
+"int"          	 { yylval.string = strdup("INT"); fprintf( flex_out,"INT_DECLARATION\n"); return TYPE;   }
+"boolean"	     { yylval.string = strdup("BOOLEAN"); fprintf( flex_out,"BOOLEAN_DECLARATION\n"); return TYPE;   }
+"callout"		 { fprintf( flex_out,"CALLOUT\n"); return CALLOUT;}
 
 ">"  			 {return GT;}
 "<"  			 {return LT;}
@@ -61,15 +62,15 @@ str         (\\n|\\t|\\'|\\\\|\\\"|[^\\"'])
 "==" 			 {return EQEQ; }
 "!=" 			 {return NOTEQ;}
 
-true|false 		 {printf("BOOLEAN: %s\n", yytext); return BOOLEAN;}
+true|false 		 {yylval.string = strdup(yytext); fprintf( flex_out,"BOOLEAN: %s\n", yytext); return BOOLEAN;}
 
 {delim} 		 {;                }
 ","				 {return COMMA;    }
-{id}			 {printf("ID: %s\n", yytext); return ID;       }
-{integer}		 {printf("INT: %s\n", yytext); return INT;  }
-{character}		 {printf("CHARACTER: %s\n", yytext); return CHARACTER;}
+{id}			 {yylval.string = strdup(yytext); fprintf( flex_out,"ID: %s\n", yytext); return ID;       }
+{integer}		 {yylval.number = atoi(yytext); fprintf( flex_out,"INT: %s\n", yytext); return INT;  }
+{character}		 {yylval.string = strdup(yytext); fprintf( flex_out,"CHARACTER: %s\n", yytext); return CHARACTER;}
 
-\"{str}*\" {printf("STRING: %s\n", yytext); return STRING;}
+\"{str}*\" {yylval.string = strdup(yytext); fprintf( flex_out,"STRING: %s\n", yytext); return STRING;}
 
 %%
 

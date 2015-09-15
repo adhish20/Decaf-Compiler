@@ -1,0 +1,8 @@
+clear
+bison -vd parser.y
+flex scanner.l
+gcc parser.tab.c lex.yy.c -lfl -o compilerV1
+./compilerV1 $1
+
+#clean: 
+#	rm -rf output compilerV1 lex.yy.c parser.output parser.tab.c parser.tab.h
