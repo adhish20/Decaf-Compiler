@@ -295,7 +295,7 @@ void ASTAssign::traverse() {
 }
 void ASTStmtDecls::traverse() {
 	TAB;
-	out << "<statement declarations>" << endl;
+	out << "<statement declarations count=\"" << count << "\">" << endl;
 	for(int i = 0; i<declList.size(); i++) {
 		tab_count++;
 		declList[i]->traverse();
