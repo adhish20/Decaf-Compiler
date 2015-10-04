@@ -105,7 +105,7 @@ statement_decls:
 field_decl:
 	TYPE vars SC
 	{
-		fprintf(bison_out, "%s DECLARATION ENCOUNTERED.", $<string>1);
+		fprintf(bison_out, "%s DECLARATION ENCOUNTERED.\n", $<string>1);
 		$$ = new ASTFieldDecl(string($1), $2);
 	}
 	| error SC
