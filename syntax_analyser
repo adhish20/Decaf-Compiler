@@ -1,8 +1,6 @@
 clear
 bison -vd parser.y
 flex scanner.l
-gcc parser.tab.c lex.yy.c -lfl -o compilerV1
-./compilerV1 $1
+g++ -w -Wno-deprecated -g -std=c++11 lex.yy.c parser.tab.c ASTDefinitions.cpp -lfl -o compilerV2 
 
-#clean: 
-#	rm -rf output compilerV1 lex.yy.c parser.output parser.tab.c parser.tab.h
+./compilerV2 $1

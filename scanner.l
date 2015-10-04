@@ -8,11 +8,16 @@
 	#include <stdio.h>
 	#include <stdlib.h>
 	#include <string.h>
+	#include<iostream>
+	#include <vector>
+	#include "ASTDefinitions.h"
 	#include "parser.tab.h"
+	#define YY_DECL extern "C" int yylex()
 	char linebuf[500];
-	extern yylex();
 	extern FILE *flex_out;
 	extern int errors;
+	extern union NODE yylval;
+	using namespace std;
 %}
 
 /*=========================================================================
@@ -170,7 +175,7 @@ true|false	{
 .			{
 				errors++;
 				fprintf(stderr, "Line %d: \x1b[31m Syntax Error \x1b[0m at %s:\n \x1b[31m %s \x1b[0m \n", yylineno, yytext, linebuf);
-			}
+			} 
 %%
 
 /************************** End Scanner File *****************************/

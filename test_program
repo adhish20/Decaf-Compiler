@@ -6,14 +6,20 @@ class Program
 	boolean D[10];
 	int E;
 	int F;
-	int G;
+	int G, T[200], Y;
 
-	E = 5;
+	E = - 5;
+	D = !A;
 	F = 6;
 	G = 7;
-	B[1]=8;
+	B[1]= 8;
 	B[2+1]=9;
+	C = true;
+	D = false;
 	A = 5 + 10 - 20 / 10 * 5;
+	C = A % B;
+	C = A < B;
+	D = C > B;
 	B[3] = A;
 	callout("printf", A);
 }
