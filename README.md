@@ -8,4 +8,4 @@ Compiler for DECAF Programming Language
 
 ### To Run
 
-./syntax_analyser <program_file>
+bash syntax_analyser test_program
