@@ -232,8 +232,6 @@ void ASTFieldDecl::traverse() {
 }
 void ASTVar::traverse() {
 	TAB;
-	out << this->declType << endl;
-	TAB;
 	out << "<declaration name=\"" << this->varName << "\"";
 	if(!this->declType.compare("Array")) {
 		out << " count=\"" << this->length << "\"";
@@ -242,7 +240,7 @@ void ASTVar::traverse() {
 }	
 void ASTFieldDecls::traverse() {
 	TAB;
-	out << "<field_declarations count=" << count << ">" << endl;
+	out << "<field_declarations count=\"" << count << "\">" << endl;
 	for(int i = 0; i < declList.size(); i++) {
 		declList[i]->traverse();
 	}
@@ -262,7 +260,7 @@ void ASTLocation::traverse() {
 	TAB;
 	out << "<location id=\"" << varName;
 	if(!loctype.compare("Array")) {
-		out << " position=\"" << expr->toString();
+		out << "\" position=\"" << expr->toString();
 	}
 	out << "\" />" << endl;
 }
@@ -295,14 +293,14 @@ void ASTAssign::traverse() {
 }
 void ASTStmtDecls::traverse() {
 	TAB;
-	out << "<statement declarations count=\"" << count << "\">" << endl;
+	out << "<statement_declarations count=\"" << count << "\">" << endl;
 	for(int i = 0; i<declList.size(); i++) {
 		tab_count++;
 		declList[i]->traverse();
 		tab_count--;
 	}
 	TAB;
-	out << "</statement declarations>" << endl;
+	out << "</statement_declarations>" << endl;
 }
 
 void ASTCallout::traverse() {
@@ -325,7 +323,34 @@ void ASTInBuilt::traverse() {
 }
 void ASTBinExpr::traverse() {
 	TAB;
-	out << "<binary_expression type=\"" << opertor <<"\">" << endl;
+	out << "<binary_expression type=\"";
+	if (!opertor.compare("+"))
+		out << "addition";
+	else if (!opertor.compare("-"))
+		out << "subtraction";
+	else if (!opertor.compare("*"))
+		out << "multiplication";
+	else if (!opertor.compare("/"))
+		out << "division";
+	else if (!opertor.compare("%"))
+		out << "remainder";
+	else if (!opertor.compare("<"))
+		out << "less_than";
+	else if (!opertor.compare(">"))
+		out << "greater_than";
+	else if (!opertor.compare("<="))
+		out << "less_equal";
+	else if (!opertor.compare(">="))
+		out << "greater_equal";
+	else if (!opertor.compare("=="))
+		out << "is_equal";
+	else if (!opertor.compare("!="))
+		out << "is_not_equal";
+	else if (!opertor.compare("&&"))
+		out << "and";
+	else if (!opertor.compare("||"))
+		out << "or";
+	out <<"\">" << endl;
 	tab_count++;
 	left->traverse();
 	right->traverse();
@@ -335,7 +360,12 @@ void ASTBinExpr::traverse() {
 }
 void ASTUnExpr::traverse() {
 	TAB;
-	out << "<unary_expression type=\"" << opertor <<"\">" << endl;
+	out << "<unary_expression type=\"";
+	if (!opertor.compare("-"))
+		out << "minus";
+	else if (!opertor.compare("!"))
+		out << "not";
+	out <<"\">" << endl;
 	tab_count++;
 	expr->traverse();
 	tab_count--;
