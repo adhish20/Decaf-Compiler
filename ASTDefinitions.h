@@ -1,8 +1,27 @@
 #include <vector>
+#include <stack>
+#include <llvm/IR/Module.h>
+#include <llvm/IR/Function.h>
+#include <llvm/IR/Type.h>
+#include <llvm/IR/DerivedTypes.h>
+#include <llvm/IR/LLVMContext.h>
+#include <llvm/IR/PassManager.h>
+#include <llvm/IR/Instructions.h>
+#include <llvm/IR/CallingConv.h>
+#include <llvm/Bitcode/ReaderWriter.h>
+#include <llvm/Analysis/Verifier.h>
+#include <llvm/Assembly/PrintModulePass.h>
+#include <llvm/IR/IRBuilder.h>
+//#include <llvm/ModuleProvider.h>
+#include <llvm/Support/TargetSelect.h>
+#include <llvm/ExecutionEngine/GenericValue.h>
+#include <llvm/ExecutionEngine/JIT.h>
+#include <llvm/Support/raw_ostream.h>
 #include <iostream>
 #include <stdlib.h>
 #include <string>
 using namespace std;
+using namespace llvm;
 
 enum exprType { binary = 1, unary = 2, location = 3, literal = 4, methodCall = 5, parenExpr = 6};
 enum literalType { Int = 1, Char = 2, Bool = 3, String = 4};
@@ -58,25 +77,68 @@ union NODE
 typedef union NODE YYSTYPE;
 #define YYSTYPE_IS_DECLARED 1
 
-class ASTStmtDecl {
-	public:
-		virtual void traverse(){}	
+class Visitor {
+	public: 
+		virtual void Visit(class ASTNode *) {}
+		virtual void accept(class ASTNode *){}
 };
-class ASTVar {
+class Traversal : public Visitor {
+	public:
+		void Visit(ASTNode *);
+};
+/****** CODE GEN CLASSES ********/
+class CodeGenBlock {
+public:
+    BasicBlock *block;
+    std::map<std::string, Value*> locals;
+};
+
+class CodeGenContext {
+    std::stack<CodeGenBlock *> blocks;
+    Function *mainFunction;
+
+public:
+    Module *module;
+    CodeGenContext() { module = new Module("main", getGlobalContext()); }
+    
+    void generateCode(class ASTNode *);
+    //GenericValue runCode();
+    std::map<std::string, Value*>& locals() { return blocks.top()->locals; }
+    BasicBlock *currentBlock() { return blocks.top()->block; }
+    void pushBlock(BasicBlock *block) { blocks.push(new CodeGenBlock()); blocks.top()->block = block; }
+    void popBlock() { CodeGenBlock *top = blocks.top(); blocks.pop(); delete top; }
+};
+/********************************/
+class ASTNode { 
+	public:
+		virtual void traverse() {}
+		virtual void accept(Visitor *v) {}
+		virtual Value *codegen(CodeGenContext&){}
+};
+class ASTStmtDecl : virtual public ASTNode {
+	public:
+		virtual void traverse(){}
+		virtual void accept(Visitor *){}
+		virtual Value* codegen(CodeGenContext &){}
+};
+class ASTVar : public ASTNode{
 	
 	private:
 		string declType;  //NORMAL OR ARRAY
 		string varName;   //Name of the Variable
 		string dataType;   // DataType of the Variable
 		unsigned int length; // Length of the array if variable is an array
+		Value *codegen(CodeGenContext& );
 	
 	public:
 		ASTVar(string, string, int length);
 		ASTVar(string, string);
 		void setDataType(string);
 		void traverse();
+		void accept(Visitor *);
+		string getVarName() { return varName; }
 };
-class ASTVars {
+class ASTVars : public ASTNode {
 	private:
 		vector <class ASTVar *> varList;
 	public:
@@ -85,8 +147,9 @@ class ASTVars {
 		void traverse();
 		vector <class ASTVar *> getVarList();
 		void write2bison(FILE *);
+		void accept(Visitor *);
 };
-class ASTFieldDecl {
+class ASTFieldDecl : public ASTNode {
 	
 	private:
 		string dataType;
@@ -96,10 +159,11 @@ class ASTFieldDecl {
 		ASTFieldDecl(string, class ASTVars *);
 		vector <class ASTVar *> getVarList();
 		void traverse();
-
+		void accept(Visitor *);
+		Value* codegen(CodeGenContext&);
 };
 
-class ASTFieldDecls {
+class ASTFieldDecls : public ASTNode {
 	private:
 		vector <class ASTFieldDecl *> declList;
 		int count;
@@ -108,8 +172,10 @@ class ASTFieldDecls {
 		void push_back(class ASTFieldDecl *);
 		//void push_back_decls(class ASTFieldDecls *);
 		void traverse();
+		void accept(Visitor *);
+		Value* codegen(CodeGenContext&);
 };
-class ASTExprs {
+class ASTExprs : public ASTNode {
 	private:
 		vector <class ASTExpr *> exprList;
 		int count;
@@ -118,8 +184,9 @@ class ASTExprs {
 		virtual string toString(){}
 		void push_back(class ASTExpr *);
 		void traverse();
+		void accept(Visitor *);
 };
-class ASTExpr {
+class ASTExpr : virtual public ASTNode {
 	protected:
 		exprType etype;
 	public:
@@ -127,6 +194,8 @@ class ASTExpr {
 		exprType getEtype() { return etype; }
 		virtual void traverse(){}
 		virtual string toString(){}
+		virtual void accept(Visitor *){}
+		virtual Value *codegen(CodeGenContext& ){}
 };
 class ASTParenExpr: public ASTExpr {
 	private:
@@ -134,19 +203,24 @@ class ASTParenExpr: public ASTExpr {
 	public:
 		ASTParenExpr(class ASTExpr *);
 		void traverse();
+		void accept(Visitor *);
 };
 class ASTMethCall: public ASTStmtDecl, public ASTExpr {
 	protected:
 		string methName;
 	public: 
-		virtual void traverse(){} 
+		virtual void traverse(){}
+		virtual void accept(Visitor *) {}
+		virtual Value* codegen(CodeGenContext &){}
 };
-class ASTCallout: public ASTMethCall{
+class ASTCallout: virtual public ASTMethCall{
 	private:
 		class ASTCalloutargs *args;
 	public:
 		ASTCallout(string, class ASTCalloutargs *);
 		void traverse();	
+		void accept(Visitor *);
+		Value* codegen(CodeGenContext& );
 };
 class ASTInBuilt: public ASTMethCall {
 	private:
@@ -154,6 +228,7 @@ class ASTInBuilt: public ASTMethCall {
 	public:
 		ASTInBuilt(string, class ASTExprs *exprs);
 		void traverse();
+		void accept(Visitor *);
 };
 class ASTLocation: public ASTExpr {	
 	private:
@@ -165,6 +240,8 @@ class ASTLocation: public ASTExpr {
 		ASTLocation(string, string);
 		void traverse();
 		string toString();
+		void accept(Visitor *);
+		Value* codegen(CodeGenContext& );
 };	
 class ASTLiteral: public ASTExpr{
 	protected:
@@ -173,6 +250,7 @@ class ASTLiteral: public ASTExpr{
 		virtual void traverse(){}
 		virtual int getValue() {}
 		virtual string toString() {}
+		void accept(Visitor *){}
 };
 class ASTIntLiteral: public ASTLiteral {
 	private:
@@ -182,7 +260,8 @@ class ASTIntLiteral: public ASTLiteral {
 		void traverse();
 		int getValue();
 		string toString();
-
+		void accept(Visitor *);
+		virtual Value *codegen(CodeGenContext& );
 };
 class ASTCharLiteral: public ASTLiteral{
 	private:
@@ -192,7 +271,7 @@ class ASTCharLiteral: public ASTLiteral{
 		void traverse();
 		string toString();
 		//int getValue();
-
+		void accept(Visitor *);
 };
 class ASTBoolLiteral: public ASTLiteral {
 	private:
@@ -202,7 +281,8 @@ class ASTBoolLiteral: public ASTLiteral {
 		void traverse();
 		string toString();
 		//int getValue();
-
+		void accept(Visitor *);
+		Value* codegen(CodeGenContext&);
 };
 class ASTString: public ASTLiteral {
 	private:
@@ -211,16 +291,19 @@ class ASTString: public ASTLiteral {
 		ASTString(string);
 		//string toString();
 		void traverse();
+		void accept(Visitor *);
 };
 class ASTBinExpr: public ASTExpr{
 	private:
 		class ASTExpr *left;
 		class ASTExpr *right;
 		string opertor;
+		Value *codegen(CodeGenContext& );
 	public:
 		ASTBinExpr(class ASTExpr *left, string opertor, class ASTExpr *right);
 		void traverse();
 		string toString();
+		void accept(Visitor *);
 };
 class ASTUnExpr: public ASTExpr {
 	private:
@@ -230,8 +313,9 @@ class ASTUnExpr: public ASTExpr {
 		ASTUnExpr(string opertor, class ASTExpr *);
 		void traverse();
 		// string toString();
+		void accept(Visitor *);
 };
-class ASTStmtDecls {
+class ASTStmtDecls : public ASTNode{
 	private:
 		vector <class ASTStmtDecl *> declList;
 		int count;
@@ -239,6 +323,8 @@ class ASTStmtDecls {
 		ASTStmtDecls();
 		void push_back(class ASTStmtDecl *);
 		void traverse();
+		void accept(Visitor *);
+		Value* codegen(CodeGenContext&);
 };
 class ASTAssign: public ASTStmtDecl{
 	private:
@@ -247,16 +333,20 @@ class ASTAssign: public ASTStmtDecl{
 	public:
 		ASTAssign(class ASTLocation *, class ASTExpr *);
 		void traverse();
+		void accept(Visitor *);
+		Value* codegen(CodeGenContext&);
 };
-class ASTCalloutarg {
+class ASTCalloutarg : public ASTNode {
 	private:
 		class ASTExpr *expr;
 	public:
 		ASTCalloutarg(class ASTExpr *);
 		ASTCalloutarg(string literal);
 		void traverse();
+		void accept(Visitor *);
+		Value* codegen(CodeGenContext &context);
 };
-class ASTCalloutargs {
+class ASTCalloutargs : public ASTNode {
 	private:
 		vector <class ASTCalloutarg *> argList;
 		int count = 0;
@@ -264,12 +354,18 @@ class ASTCalloutargs {
 		ASTCalloutargs();
 		void push_back(class ASTCalloutarg *);
 		void traverse();
+		void accept(Visitor *);
+		int getCount() { return count; }
+		vector <class ASTCalloutarg *> getArgsList(){return argList;}
+		Value* codegen(CodeGenContext &context);
 };
-class ASTProg {
+class ASTProg : public ASTNode {
 	private:
 		class ASTFieldDecls *field_decls;
 		class ASTStmtDecls *stmt_decls;
 	public:
 		ASTProg(class ASTFieldDecls *, class ASTStmtDecls *);
 		void traverse();
+		void accept(Visitor *);
+		Value* codegen(CodeGenContext& );
 };	

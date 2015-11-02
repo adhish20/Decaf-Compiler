@@ -1,6 +1,9 @@
 clear
 bison -vd parser.y
 flex scanner.l
-g++ -w -Wno-deprecated -g -std=c++11 lex.yy.c parser.tab.c ASTDefinitions.cpp -lfl -o compilerV2 
+g++ -w -Wno-deprecated -g -std=c++1y lex.yy.c parser.tab.c ASTDefinitions.cpp -lfl `llvm-config --cxxflags --cppflags jit native --ldflags --libs core` `llvm-config --ldflags` -ltinfo -o compilerV2 
+
+
+#clang++ -w -Wno-deprecated -g -std=c++1y lex.yy.c parser.tab.c ASTDefinitions.cpp -lfl `llvm-config --cppflags --libs all` `llvm-config --ldflags` -ltinfo -o compilerV2 
 
 ./compilerV2 $1

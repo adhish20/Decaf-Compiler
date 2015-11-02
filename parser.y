@@ -7,11 +7,19 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <memory>
 #include <string.h>
 #include<iostream>
 #include <vector>
 #include "ASTDefinitions.h"
+#include "llvm/ADT/STLExtras.h"
+#include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/Module.h"
+#include "llvm/IR/Verifier.h"
 #define YYDEBUG 1
+using namespace std;
+using namespace llvm;
 
 extern "C" int yylex();
 extern "C" int yylineno;
@@ -22,8 +30,10 @@ extern union NODE yylval;
 int errors;
 FILE *flex_out;
 FILE *bison_out;
+FILE *IR_out;
 void yyerror(char *);
-class ASTProg *start = NULL;
+class ASTNode *start = NULL;
+class Visitor *visitor = new Traversal();
 
 /********************************** AUXILLARY VARIABLES ***********************************/
 class ASTIntLiteral *ONE = new ASTIntLiteral(1);
@@ -105,7 +115,7 @@ statement_decls:
 field_decl:
 	TYPE vars SC
 	{
-		fprintf(bison_out, "%s DECLARATION ENCOUNTERED.\n", $<string>1);
+		fprintf(bison_out, "%s DECLARATION ENCOUNTERED.", $<string>1);
 		$$ = new ASTFieldDecl(string($1), $2);
 	}
 	| error SC
@@ -344,16 +354,20 @@ assign_op:
 =========================================================================*/
 main( int argc, char *argv[] )
 {
+	extern Module *TheModule;
+	
 	extern FILE *yyin;
 	++argv; --argc;
 	yyin = fopen( argv[0], "r" );
 	flex_out = fopen("flex_output.txt", "w");
 	bison_out = fopen("bison_output.txt", "w");
-	/*yydebug = 1;*/
+	//IR_out = fopen("IR.txt", "w");
+	CodeGenContext *ccontext = new CodeGenContext();
 	errors = 0;
 	yyparse ();
 	fprintf(stdout, "201403004\n");
 	fprintf(stdout, "201301012\n");
+	ccontext->generateCode(start);
 	if(errors == 0)
 	{
 		fprintf(stdout, "Success\n");
@@ -363,9 +377,8 @@ main( int argc, char *argv[] )
 		fprintf(stderr, "Total Errors: %d\n", errors);
 		fprintf(stdout, "Syntax Error\n");
 	}
-	if(start)
-		start->traverse();
-
+	if(start && visitor)
+		visitor->Visit(start);
 }
 /*=========================================================================
 							YYERROR

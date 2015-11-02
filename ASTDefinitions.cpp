@@ -6,9 +6,15 @@
 #define TAB giveTabs()
 
 using namespace std;
+using namespace llvm;
 int tab_count = 0;
 int tab_width = 4;
 ofstream out("XML_visitor.txt");
+
+Module *TheModule;
+static IRBuilder<> Builder(getGlobalContext());
+static std::map<std::string, Value*> NamedValues;
+
 void reverse(char str[], int length)
 {
     int start = 0;
@@ -56,6 +62,139 @@ void giveTabs() {
 		}
 	}
 }
+/*************************** CODE GENERATOR *************************************/
+void CodeGenContext::generateCode(class ASTNode *start)
+{
+	
+	/* Create the top level interpreter function to call as entry */
+	//vector<const Type*> argTypes;
+	FunctionType *ftype = FunctionType::get(Type::getVoidTy(getGlobalContext()), false);
+	mainFunction = Function::Create(ftype, GlobalValue::InternalLinkage, "main", module);
+	BasicBlock *bblock = BasicBlock::Create(getGlobalContext(), "entry", mainFunction, 0);
+	
+	/* Push a new variable/block context */
+	pushBlock(bblock);
+	// cout << "1st Stop\n";
+	start->codegen(*this)->dump();
+	ReturnInst::Create(getGlobalContext(), bblock);
+	popBlock();
+	
+	/*Print the byte code */
+	/* std::cout << "Code is generated.n";
+	PassManager pm;
+	pm.add(createPrintModulePass(&outs()));
+	pm.run(*module); */
+}
+Type *typeOf() 
+{
+		return Type::getInt64Ty(getGlobalContext());
+}
+Value* ASTFieldDecls::codegen(CodeGenContext& context) {
+	for(int i = 0; i < declList.size(); i++) {
+		declList[i]->codegen(context);
+	}
+}
+Value* ASTFieldDecl::codegen(CodeGenContext& context) {
+
+	string varName;
+	for(int i = 0; i<varList.size(); i++) {
+		varName = varList[i]->getVarName();
+		AllocaInst *alloc = new AllocaInst(typeOf(), varName.c_str(), context.currentBlock());
+		context.locals()[varName.c_str()] = alloc;
+	}
+	return NULL;
+}
+Value* ASTProg::codegen(CodeGenContext &context) {
+	field_decls->codegen(context);
+	stmt_decls->codegen(context);
+}
+Value *ASTIntLiteral::codegen(CodeGenContext &context) {
+  Value *V = ConstantInt::get(Type::getInt64Ty(getGlobalContext()), value, true);
+  V->dump();
+  return V;
+}
+Value *ASTBoolLiteral::codegen(CodeGenContext &context) {
+  Value *V = ConstantInt::get(Type::getInt64Ty(getGlobalContext()), value == "true", true);
+  V->dump();
+  return V;
+}
+Value *ASTVar::codegen(CodeGenContext &context){
+	// cout << "Var Stop\n";
+	printf("Here due to %s\n", varName.c_str());	
+	return new LoadInst(context.locals()[varName.c_str()], "", false, context.currentBlock());
+}
+Value *ASTBinExpr::codegen(CodeGenContext &context) {
+	Value *V = NULL;
+	Instruction::BinaryOps instr;
+	switch (opertor.c_str()[0]) {
+		case '+': 	instr = Instruction::Add; break;
+		case '-': 	instr = Instruction::Sub; break;
+		case '*': 	instr = Instruction::Mul; break;
+		case '/': 	instr = Instruction::SDiv; break;
+		case '%':	instr = Instruction::SRem; break;
+	}
+
+	V = BinaryOperator::Create(instr, left->codegen(context), right->codegen(context), "", context.currentBlock());
+	V->dump();
+	return V;
+}
+Value *ASTStmtDecls::codegen(CodeGenContext& context)
+{
+	for(int i = 0; i<declList.size(); i++) {
+		//cout << "3rd Stops\n";
+		declList[i]->codegen(context);
+	}
+}
+// Value* ASTMethCall(CodeGenContext& context) {
+// 	return NULL;
+// }
+Value* ASTCalloutarg::codegen(CodeGenContext &context) {
+	expr->codegen(context);
+}
+Value* ASTCalloutargs::codegen(CodeGenContext &context) {
+	// cout << "Here1\n";
+	for(int i = 0; i<argList.size(); i++) {
+		// cout << "Iter\n";
+		argList[i]->codegen(context);
+	}
+	// cout << "Here2\n";
+}
+Value* ASTCallout::codegen(CodeGenContext& context) {
+	// vector<const Type*> argTypes;
+	int i;
+	Type **argTypes = NULL;
+	argTypes = (Type **)malloc(sizeof(Type*) * args->getCount());
+	for (i = 0; i!=args->getCount(); i++) {
+		// argTypes.push_back(typeOf());
+		argTypes[i] = typeOf();
+	}
+
+	args->codegen(context);
+	// vector <class ASTCalloutarg *> argList = args
+	// CallInst *call = CallInst::Create(function, args->getArgsList().begin(), args->getArgsList().end(), "", context.currentBlock());
+	// call->dump();
+	return 0;
+}
+Value* ASTAssign::codegen(CodeGenContext& context) {
+	location->codegen(context);
+	expr->codegen(context);
+}
+Value* ASTLocation::codegen(CodeGenContext& context) {
+	// // if (context.locals().find(varName) == context.locals().end()) {
+	// // 	std::cerr << "undeclared variable " << name << std::endl;
+	// // 	return NULL;
+	// // }
+	// // cout << "Location Stop\n";
+	// // cout << "VarName: " << varName.c_str() << endl;
+	// cout << "Location due to " << varName.c_str() << endl;
+	Value *V = new LoadInst(context.locals()[varName.c_str()], "", false, context.currentBlock());
+	V->dump();
+	if(!loctype.compare("Array")){
+		expr->codegen(context);
+	}
+	return V;
+}
+/********************************************************************************/
 /*************************** CONSTRUCTORS ***************************************/
 
 ASTVar::ASTVar(string declType, string varName, int length) {
@@ -222,6 +361,10 @@ string ASTLocation::toString() {
 string ASTBinExpr::toString() {
 	return left->toString() + opertor + right->toString();
 }
+
+void Traversal::Visit(ASTNode *node) {
+	node->traverse();
+}
 /****************************** TRAVERSAL FUNCTIONS ********************************/
 void ASTFieldDecl::traverse() {
 	for(int i = 0; i<varList.size(); i++) {
@@ -230,6 +373,11 @@ void ASTFieldDecl::traverse() {
 		tab_count--;
 	}
 }
+void ASTFieldDecl::accept(Visitor *v)
+{
+	v->Visit(this);
+}
+
 void ASTVar::traverse() {
 	TAB;
 	out << "<declaration name=\"" << this->varName << "\"";
@@ -238,6 +386,11 @@ void ASTVar::traverse() {
 	}
 	out << " type=\"" << this->dataType << "\"/>" << endl;
 }	
+void ASTVar::accept(Visitor *v)
+{
+	v->Visit(this);
+}
+
 void ASTFieldDecls::traverse() {
 	TAB;
 	out << "<field_declarations count=\"" << count << "\">" << endl;
@@ -247,6 +400,11 @@ void ASTFieldDecls::traverse() {
 	TAB;
 	out << "</field_declarations>" << endl;
 }
+void ASTFieldDecls::accept(Visitor *v)
+{
+	v->Visit(this);
+}
+
 
 void ASTVars::traverse() {
 	for(int i = 0; i<varList.size(); i++) {
@@ -255,32 +413,72 @@ void ASTVars::traverse() {
 		tab_count--;
 	}
 }
+void ASTVars::accept(Visitor *v)
+{
+	v->Visit(this);
+}
 
 void ASTLocation::traverse() {
 	TAB;
-	out << "<location id=\"" << varName;
+	out << "<location id=\"" << varName << "\">" << endl;
 	if(!loctype.compare("Array")) {
-		out << "\" position=\"" << expr->toString();
+		tab_count++;
+		TAB;
+		out << "<position>" << endl;
+		
+		tab_count++;
+		expr->traverse();
+		tab_count--;
+
+		TAB;
+		out << "</position>" << endl;
+		tab_count--;
 	}
-	out << "\" />" << endl;
+	TAB;
+	out << "</location>" << endl;
 }
+void ASTLocation::accept(Visitor *v)
+{
+	v->Visit(this);
+}
+
 void ASTIntLiteral::traverse() {
 	TAB;
 	out << "<integer value=\"" << value << "\" />" << endl;
 }
+void ASTIntLiteral::accept(Visitor *v)
+{
+	v->Visit(this);
+}
+
 void ASTCharLiteral::traverse() {
 	TAB;
 	out << "<character value=\"" << value << "\" />" << endl;
 
 }
+void ASTCharLiteral::accept(Visitor *v)
+{
+	v->Visit(this);
+}
+
 void ASTBoolLiteral::traverse() {
 	TAB;
 	out << "<boolean value=\"" << value << "\" />" << endl;
 }
+void ASTBoolLiteral::accept(Visitor *v)
+{
+	v->Visit(this);
+}
+
 void ASTString::traverse() {
 	TAB;
 	out << "<string value=\"" << value << "\" />" << endl;
 }
+void ASTString::accept(Visitor *v)
+{
+	v->Visit(this);
+}
+
 void ASTAssign::traverse() {
 	TAB;
 	out << "<assignment>" << endl;
@@ -291,6 +489,11 @@ void ASTAssign::traverse() {
 	TAB;
 	out << "</assignment>" << endl;
 }
+void ASTAssign::accept(Visitor *v)
+{
+	v->Visit(this);
+}
+
 void ASTStmtDecls::traverse() {
 	TAB;
 	out << "<statement_declarations count=\"" << count << "\">" << endl;
@@ -302,6 +505,10 @@ void ASTStmtDecls::traverse() {
 	TAB;
 	out << "</statement_declarations>" << endl;
 }
+void ASTStmtDecls::accept(Visitor *v)
+{
+	v->Visit(this);
+}
 
 void ASTCallout::traverse() {
 	TAB;
@@ -312,6 +519,11 @@ void ASTCallout::traverse() {
 	TAB;
 	out << "</callout>" << endl;
 }
+void ASTCallout::accept(Visitor *v)
+{
+	v->Visit(this);
+}
+
 void ASTInBuilt::traverse() {
 	TAB;
 	out << "<method_call function=\"" << methName << "\">" << endl;
@@ -321,6 +533,11 @@ void ASTInBuilt::traverse() {
 	TAB;
 	out << "</callout>" << endl;
 }
+void ASTInBuilt::accept(Visitor *v)
+{
+	v->Visit(this);
+}
+
 void ASTBinExpr::traverse() {
 	TAB;
 	out << "<binary_expression type=\"";
@@ -358,6 +575,11 @@ void ASTBinExpr::traverse() {
 	TAB;
 	out << "</binary_expression>" << endl;
 }
+void ASTBinExpr::accept(Visitor *v)
+{
+	v->Visit(this);
+}
+
 void ASTUnExpr::traverse() {
 	TAB;
 	out << "<unary_expression type=\"";
@@ -372,6 +594,11 @@ void ASTUnExpr::traverse() {
 	TAB;
 	out << "</unary_expression>" << endl;
 }
+void ASTUnExpr::accept(Visitor *v)
+{
+	v->Visit(this);
+}
+
 void ASTProg::traverse() {
 	TAB;
 	out << "<program>" << endl;
@@ -382,6 +609,11 @@ void ASTProg::traverse() {
 	TAB;
 	out << "</program>" << endl;
 }
+void ASTProg::accept(Visitor *v)
+{
+	v->Visit(this);
+}
+
 void ASTParenExpr::traverse() {
 	TAB;
 	out << "<paren_term>" << endl;
@@ -391,6 +623,11 @@ void ASTParenExpr::traverse() {
 	TAB;
 	out << "</paren_term>" << endl;
 }
+void ASTParenExpr::accept(Visitor *v)
+{
+	v->Visit(this);
+}
+
 void ASTExprs::traverse() {
 	for(int i = 0; i<exprList.size(); i++) {
 		tab_count++;
@@ -398,13 +635,27 @@ void ASTExprs::traverse() {
 		tab_count--;
 	}
 }
+void ASTExprs::accept(Visitor *v)
+{
+	v->Visit(this);
+}
+
 void ASTCalloutarg::traverse() {
 	tab_count++;
 	expr->traverse();
 	tab_count--;
 }
+void ASTCalloutarg::accept(Visitor *v)
+{
+	v->Visit(this);
+}
+
 void ASTCalloutargs::traverse() {
 	for(int i = 0; i<argList.size(); i++) {
 		argList[i]->traverse();
 	}
+}
+void ASTCalloutargs::accept(Visitor *v)
+{
+	v->Visit(this);
 }
