@@ -14,6 +14,7 @@ ofstream out("XML_visitor.txt");
 Module *TheModule;
 static IRBuilder<> Builder(getGlobalContext());
 static std::map<std::string, Value*> NamedValues;
+Value *mainF;
 
 void reverse(char str[], int length)
 {
@@ -66,24 +67,18 @@ void giveTabs() {
 void CodeGenContext::generateCode(class ASTNode *start)
 {
 	
-	/* Create the top level interpreter function to call as entry */
-	//vector<const Type*> argTypes;
 	FunctionType *ftype = FunctionType::get(Type::getVoidTy(getGlobalContext()), false);
 	mainFunction = Function::Create(ftype, GlobalValue::InternalLinkage, "main", module);
 	BasicBlock *bblock = BasicBlock::Create(getGlobalContext(), "entry", mainFunction, 0);
 	
+	mainF = mainFunction;	
 	/* Push a new variable/block context */
 	pushBlock(bblock);
-	// cout << "1st Stop\n";
+	
 	start->codegen(*this)->dump();
 	ReturnInst::Create(getGlobalContext(), bblock);
-	popBlock();
 	
-	/*Print the byte code */
-	/* std::cout << "Code is generated.n";
-	PassManager pm;
-	pm.add(createPrintModulePass(&outs()));
-	pm.run(*module); */
+	popBlock();
 }
 Type *typeOf() 
 {
@@ -98,30 +93,55 @@ Value* ASTFieldDecl::codegen(CodeGenContext& context) {
 
 	string varName;
 	for(int i = 0; i<varList.size(); i++) {
+
 		varName = varList[i]->getVarName();
-		AllocaInst *alloc = new AllocaInst(typeOf(), varName.c_str(), context.currentBlock());
-		context.locals()[varName.c_str()] = alloc;
+		if( context.locals().find(varName) == context.locals().end() ) {
+			AllocaInst *alloc = new AllocaInst(typeOf(), varName.c_str(), context.currentBlock());
+			context.locals()[varName.c_str()] = alloc;
+			alloc->setAlignment(8);
+			//alloc->dump();
+			return alloc;
+		}
+		else {
+			std::cerr << "redeclared variable " << varName.c_str() << endl;
+
+		}
 	}
 	return NULL;
 }
 Value* ASTProg::codegen(CodeGenContext &context) {
+	
+	/**** MAIN ******/
+	// Function *function = context.module->getFunction("main");
+	// ArrayRef<Value *>args;
+	// CallInst *call = CallInst::Create(function, args, "", context.currentBlock());
+	// call->dump();
+	/****************/
+
+	// FunctionType *ftype = FunctionType::get(Type::getVoidTy(getGlobalContext()), false);
+	// context.mainFunction = Function::Create(ftype, GlobalValue::InternalLinkage, "main", context.module);
+	// BasicBlock *bblock = BasicBlock::Create(getGlobalContext(), "entry", mainFunction, 0);
+	// context.mainFunction->dump();
 	field_decls->codegen(context);
 	stmt_decls->codegen(context);
+	return mainF;
 }
 Value *ASTIntLiteral::codegen(CodeGenContext &context) {
   Value *V = ConstantInt::get(Type::getInt64Ty(getGlobalContext()), value, true);
-  V->dump();
+  //V->dump();
   return V;
 }
 Value *ASTBoolLiteral::codegen(CodeGenContext &context) {
   Value *V = ConstantInt::get(Type::getInt64Ty(getGlobalContext()), value == "true", true);
-  V->dump();
+  //V->dump();
   return V;
 }
 Value *ASTVar::codegen(CodeGenContext &context){
 	// cout << "Var Stop\n";
 	printf("Here due to %s\n", varName.c_str());	
-	return new LoadInst(context.locals()[varName.c_str()], "", false, context.currentBlock());
+	Value *v = new LoadInst(context.locals()[varName.c_str()], "", false, context.currentBlock());
+	//v->dump();
+	return v;
 }
 Value *ASTBinExpr::codegen(CodeGenContext &context) {
 	Value *V = NULL;
@@ -135,7 +155,7 @@ Value *ASTBinExpr::codegen(CodeGenContext &context) {
 	}
 
 	V = BinaryOperator::Create(instr, left->codegen(context), right->codegen(context), "", context.currentBlock());
-	V->dump();
+	//V->dump();
 	return V;
 }
 Value *ASTStmtDecls::codegen(CodeGenContext& context)
@@ -170,25 +190,32 @@ Value* ASTCallout::codegen(CodeGenContext& context) {
 	}
 
 	args->codegen(context);
+
 	// vector <class ASTCalloutarg *> argList = args
 	// CallInst *call = CallInst::Create(function, args->getArgsList().begin(), args->getArgsList().end(), "", context.currentBlock());
 	// call->dump();
 	return 0;
 }
 Value* ASTAssign::codegen(CodeGenContext& context) {
-	location->codegen(context);
-	expr->codegen(context);
+	// location->codegen(context);
+	// expr->codegen(context);
+	if (context.locals().find(location->getVarName()) == context.locals().end()) {
+		std::cerr << "undeclared variable " << location->getVarName() << endl;
+		return NULL;
+	}
+	Value *v = new StoreInst(expr->codegen(context), context.locals()[location->getVarName().c_str()], false, context.currentBlock());
+	return v;
 }
 Value* ASTLocation::codegen(CodeGenContext& context) {
-	// // if (context.locals().find(varName) == context.locals().end()) {
-	// // 	std::cerr << "undeclared variable " << name << std::endl;
-	// // 	return NULL;
-	// // }
+	if (context.locals().find(varName) == context.locals().end()) {
+		std::cerr << "undeclared variable " << varName.c_str() << endl;
+		return NULL;
+	}
 	// // cout << "Location Stop\n";
 	// // cout << "VarName: " << varName.c_str() << endl;
 	// cout << "Location due to " << varName.c_str() << endl;
 	Value *V = new LoadInst(context.locals()[varName.c_str()], "", false, context.currentBlock());
-	V->dump();
+	//V->dump();
 	if(!loctype.compare("Array")){
 		expr->codegen(context);
 	}
@@ -539,6 +566,9 @@ void ASTInBuilt::accept(Visitor *v)
 }
 
 void ASTBinExpr::traverse() {
+
+	// if(left->getData)
+
 	TAB;
 	out << "<binary_expression type=\"";
 	if (!opertor.compare("+"))

@@ -242,6 +242,7 @@ class ASTLocation: public ASTExpr {
 		string toString();
 		void accept(Visitor *);
 		Value* codegen(CodeGenContext& );
+		string getVarName() { return varName; }
 };	
 class ASTLiteral: public ASTExpr{
 	protected:
