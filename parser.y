@@ -85,30 +85,40 @@ program:
 	CLASS ID LCP field_decls statement_decls RCP
 	{
 		fprintf(bison_out, "PROGRAM ENCOUNTERED\n");
-		$$ = new ASTProg($4, $5);
-		start = $$;
+		if(errors == 0) {
+			$$ = new ASTProg($4, $5);
+			start = $$;
+		}
 	}
 	;
 
 field_decls:
 	/* empty */ 
 	{
-		$$ = new ASTFieldDecls();
+		if(errors == 0) {
+			$$ = new ASTFieldDecls();
+		}
 	}
 	| field_decls field_decl 
 	{
-		$$->push_back($2);
+		if(errors == 0) {
+			$$->push_back($2);
+		}
 	}
 	;
 
 statement_decls:
 	/* empty */ 
 	{
-		$$ = new ASTStmtDecls();
+		if(errors == 0) {
+			$$ = new ASTStmtDecls();
+		}
 	}
 	| statement_decls statement_decl
 	{
-		$$->push_back($2);
+		if(errors == 0) {
+			$$->push_back($2);
+		}
 	}
 	;
 
@@ -116,7 +126,9 @@ field_decl:
 	TYPE vars SC
 	{
 		fprintf(bison_out, "%s DECLARATION ENCOUNTERED.", $<string>1);
-		$$ = new ASTFieldDecl(string($1), $2);
+		if(errors == 0) {
+			$$ = new ASTFieldDecl(string($1), $2);
+		}
 	}
 	| error SC
 	{
@@ -126,25 +138,33 @@ field_decl:
 vars:
 	var
 	{
-		$$ = new ASTVars();
-		$$->push_back($1);
+		if(errors == 0) {
+			$$ = new ASTVars();
+			$$->push_back($1);
+		}
 		
 	}
 	| vars COMMA var
 	{
-		$$->push_back($3);
+		if(errors == 0) {
+			$$->push_back($3);
+		}
 	}
 	;
 
 var:
 	ID
 	{
-		$$ = new ASTVar(string("Normal"), string($1));
+		if(errors == 0) {
+			$$ = new ASTVar(string("Normal"), string($1));
+		}
 		//start = $$;
 	}
 	| ID LSP INT RSP
 	{
-		$$ = new ASTVar(string("Array"), string($1), $3);
+		if(errors == 0) {
+			$$ = new ASTVar(string("Array"), string($1), $3);
+		}
 		//start = $$;
 	}
 	;
@@ -153,13 +173,16 @@ statement_decl:
 	location assign_op expr SC
 	{
 		fprintf(bison_out, "ASSIGNMENT OPERATION ENCOUNTERED\n");
-		$$ = new ASTAssign($1, $3);
+		if(errors == 0) {
+			$$ = new ASTAssign($1, $3);
+		}
 	}
 	| CALLOUT LRP STRING COMMA callout_args RRP SC
 	{
 		fprintf(bison_out, "CALLOUT TO %s ENCOUNTERED\n", $<string>3);
-		$$ = new ASTCallout(string($3), $5);
-	}
+		if(errors == 0) {
+			$$ = new ASTCallout(string($3), $5);
+		}	}
 	| error SC
 	{
 		yyerrok;
@@ -169,117 +192,164 @@ statement_decl:
 expr:
 	location 
 	{ 
-		$$ = $1;
+		if(errors == 0) {
+			$$ = $1;
+		}
 	}				
 	| method_call 
 	{ 
-		$$ = $1; 
+		if(errors == 0) {
+			$$ = $1; 
+		}
 	}
 	| literal 
 	{ 
+		if(errors == 0) {
 		$$ = $1;
+		}
 	}
 	| expr ADD expr 
 	{
 		fprintf(bison_out, "ADDITION ENCOUNTERED\n");
+		if(errors == 0) {
 		$$ = new ASTBinExpr($1, string("+"), $3); 
+		}
 	}
 	| expr SUBTRACT expr
 	{
 		fprintf(bison_out, "SUBTRACTION ENCOUNTERED\n");
-		$$ = new ASTBinExpr($1, string("-"), $3); 
+		if(errors == 0) {
+			$$ = new ASTBinExpr($1, string("-"), $3); 
+		}
 	}
+
 	| expr MULTIPLY expr{
 		fprintf(bison_out, "MULTIPLICATION ENCOUNTERED\n");
-		$$ = new ASTBinExpr($1, string("*"), $3); 
+		if(errors == 0) {
+			$$ = new ASTBinExpr($1, string("*"), $3); 
+		}
 	}
 	| expr DIVIDE expr
 	{
 		fprintf(bison_out, "DIVISION ENCOUNTERED\n");
-		$$ = new ASTBinExpr($1, string("/"), $3); 
+		if(errors == 0) {
+			$$ = new ASTBinExpr($1, string("/"), $3); 
+		}
 	}
 	| expr MOD expr
 	{
 		fprintf(bison_out, "MOD ENCOUNTERED\n");
-		$$ = new ASTBinExpr($1, string("%"), $3); 
+		if(errors == 0) {
+			$$ = new ASTBinExpr($1, string("%"), $3); 
+		}
 	}
 	| expr LT expr
 	{
 		fprintf(bison_out, "LESS THAN ENCOUNTERED\n");
-		$$ = new ASTBinExpr($1, string("<"), $3); 
+		if(errors == 0) {
+			$$ = new ASTBinExpr($1, string("<"), $3); 
+		}
 	}
 	| expr GT expr
 	{
 		fprintf(bison_out, "GREATER THAN ENCOUNTERED\n");
-		$$ = new ASTBinExpr($1, string(">"), $3); 
+		if(errors == 0) {
+			$$ = new ASTBinExpr($1, string(">"), $3); 
+		}
 	}
 	| expr LE expr
 	{
 		fprintf(bison_out, "LESS THAN EQUAL TO ENCOUNTERED\n");
-		$$ = new ASTBinExpr($1, string("<="), $3); 
+		if(errors == 0) {
+			$$ = new ASTBinExpr($1, string("<="), $3); 
+		}
 	}
 	| expr GE expr
 	{
 		fprintf(bison_out, "GREATER THAN EQUAL TO ENCOUNTERED\n");
-		$$ = new ASTBinExpr($1, string(">="), $3); 
+		if(errors == 0) {
+			$$ = new ASTBinExpr($1, string(">="), $3); 
+		}
 	}
 	| expr EQEQ expr
 	{
 		fprintf(bison_out, "EQUAL EQUAL TO ENCOUNTERED\n");
-		$$ = new ASTBinExpr($1, string("=="), $3); 
+		if(errors == 0) {
+			$$ = new ASTBinExpr($1, string("=="), $3); 
+		}
 	}
 	| expr NOTEQ expr
 	{
 		fprintf(bison_out, "NOT EQUAL TO ENCOUNTERED\n");
-		$$ = new ASTBinExpr($1, string("!="), $3); 
+		if(errors == 0) {
+			$$ = new ASTBinExpr($1, string("!="), $3); 
+		}
 	}
 	| expr OROR expr
 	{
 		fprintf(bison_out, "CONDITIONAL OR ENCOUNTERED\n");
-		$$ = new ASTBinExpr($1, string("||"), $3); 
+		if(errors == 0) {
+			$$ = new ASTBinExpr($1, string("||"), $3); 
+		}	
 	}
 	| expr ANDAND expr
 	{
 		fprintf(bison_out, "CONDITIONAL AND ENCOUNTERED\n");
-		$$ = new ASTBinExpr($1, string("&&"), $3); 
+		if(errors == 0) {
+			$$ = new ASTBinExpr($1, string("&&"), $3); 
+		}
 	}
 	| SUBTRACT expr %prec UMINUS
 	{
 		fprintf(bison_out, "UNARY MINUS ENCOUNTERED\n");
-		$$ = new ASTUnExpr("-",  $2);
+		if(errors == 0) {
+			$$ = new ASTUnExpr("-",  $2);
+		}
 	}
 	| NOT expr
 	{
 		fprintf(bison_out, "NOT ENCOUNTERED\n");
-		$$ = new ASTUnExpr(string("!"), $2);
+		if(errors == 0) {
+			$$ = new ASTUnExpr(string("!"), $2);
+		}
 	}
 	| LRP expr RRP 	
 	{
-		$$ = new ASTParenExpr($2);
+		if(errors == 0) {
+			$$ = new ASTParenExpr($2);
+		}
 	}			
 	;
 
 method_call:
 	ID LRP exprs RRP SC
 	{
-		$$ = new ASTInBuilt(string($1), $3);
+		if(errors == 0) {
+			$$ = new ASTInBuilt(string($1), $3);
+		}
 	}
 	| CALLOUT LRP STRING COMMA callout_args RRP SC
 	{
 		fprintf(bison_out, "CALLOUT TO %s ENCOUNTERED\n", $<string>3);
-		$$ = new ASTCallout(string($3), $5);
+		if(errors == 0) {
+			$$ = new ASTCallout(string($3), $5);
+		}
 	}
 	;
 
 exprs:
 	expr
 	{
-		$$ = new ASTExprs();
-		$$->push_back($1);
+		if(errors == 0) {
+			$$ = new ASTExprs();
+			$$->push_back($1);
+		}
 	}
 	| exprs COMMA expr
 	{
-		$$->push_back($3);
+		if(errors == 0) {
+			$$->push_back($3);
+		}
 	}
 	;
 
@@ -287,19 +357,25 @@ literal:
 	INT
 	{
 		fprintf(bison_out, "INT ENCOUNTERED=%d\n", $1);
-		$$ = new ASTIntLiteral($1);
+		if(errors == 0) {
+			$$ = new ASTIntLiteral($1);
+		}
 		//start = $$;
 	}
 	| CHARACTER
 	{
 		fprintf(bison_out, "CHAR ENCOUNTERED=%s\n", $1);
-		$$ = new ASTCharLiteral($1);
+		if(errors == 0) {
+			$$ = new ASTCharLiteral($1);
+		}
 		//start = $$;
 	}
 	| BOOLEAN
 	{
 		fprintf(bison_out, "BOOLEAN ENCOUNTERED=%s\n", $1);
-		$$ = new ASTBoolLiteral($1);
+		if(errors == 0) {
+			$$ = new ASTBoolLiteral($1);
+		}
 		//start = $$;
 	}
 	;
@@ -308,13 +384,17 @@ location:
 	ID
 	{
 		fprintf(bison_out, "LOCATION ENCOUNTERED=%s\n", $1);
-		$$ = new ASTLocation(string("Normal"), $1);
+		if(errors == 0) {
+			$$ = new ASTLocation(string("Normal"), $1);
+		}
 		//start = $$;
 	}
 	| ID LSP expr RSP
 	{
 		fprintf(bison_out, "LOCATION ENCOUNTERED=%s\n", $1);
-		$$ = new ASTLocation(string("Array"), $1, $3);
+		if(errors == 0) {
+			$$ = new ASTLocation(string("Array"), $1, $3);
+		}
 		//start = $$;
 	}
 	;
@@ -322,23 +402,31 @@ location:
 callout_args:
 	callout_arg 
 	{
-		$$ = new ASTCalloutargs();
-		$$->push_back($1);
+		if(errors == 0) {
+			$$ = new ASTCalloutargs();
+			$$->push_back($1);
+		}
 	}
 	| callout_args COMMA callout_arg
 	{
-		$$->push_back($3);
+		if(errors == 0) {
+			$$->push_back($3);
+		}
 	}
 	;
 
 callout_arg:
 	expr 
 	{
-		$$ = new ASTCalloutarg($1);
+		if(errors == 0) {
+			$$ = new ASTCalloutarg($1);
+		}
 	}
 	| STRING 
 	{
-		$$ = new ASTCalloutarg($1);
+		if(errors == 0) {
+			$$ = new ASTCalloutarg($1);
+		}
 	}
 	;
 
@@ -367,7 +455,9 @@ main( int argc, char *argv[] )
 	yyparse ();
 	fprintf(stdout, "201403004\n");
 	fprintf(stdout, "201301012\n");
-	ccontext->generateCode(start);
+	
+	//ccontext->runCode();
+
 	if(errors == 0)
 	{
 		fprintf(stdout, "Success\n");
@@ -377,8 +467,12 @@ main( int argc, char *argv[] )
 		fprintf(stderr, "Total Errors: %d\n", errors);
 		fprintf(stdout, "Syntax Error\n");
 	}
-	if(start && visitor)
+	if(start && visitor && errors == 0) {
 		visitor->Visit(start);
+	}
+	if(errors == 0) {
+		//ccontext->generateCode(start);
+	}
 }
 /*=========================================================================
 							YYERROR

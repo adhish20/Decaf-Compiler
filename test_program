@@ -2,22 +2,20 @@ class Program
 {
 	int A;
 	int B[10];
-	boolean C;
+	int C;
 	boolean D[10];
 	int E;
 	int F;
-	int G, T[200], Y;
+	int G;
+	boolean X;
 
-	E = - 5;
-	D = !A;
+	X = ! D[0];
+	X = D[3];
 	F = 6;
 	G = 7;
-	B[1] = 8;
+	B[1]=8;
 	B[2+1]=9;
-	C = true;
-	D = false;
-	A = 5 + 10 - 20 / 10 * 5;
-	C = A % B;
-	B[3] = A;
+	A = 5 + C + 20 / 10 * 5;
+	B[A] = A;
 	callout("printf", A);
 }

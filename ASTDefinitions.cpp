@@ -7,14 +7,26 @@
 
 using namespace std;
 using namespace llvm;
+
+extern int errors;
+extern "C" int yylineno;
+extern "C" char linebuf[500];
+
 int tab_count = 0;
 int tab_width = 4;
+
+string s("Integer");
+string e("Error");
+
 ofstream out("XML_visitor.txt");
 
 Module *TheModule;
 static IRBuilder<> Builder(getGlobalContext());
 static std::map<std::string, Value*> NamedValues;
 Value *mainF;
+std::map<string, string> allVars;
+
+
 
 void reverse(char str[], int length)
 {
@@ -75,11 +87,25 @@ void CodeGenContext::generateCode(class ASTNode *start)
 	/* Push a new variable/block context */
 	pushBlock(bblock);
 	
-	start->codegen(*this)->dump();
+	start->codegen(*this);
 	ReturnInst::Create(getGlobalContext(), bblock);
-	
+
 	popBlock();
+
+	std::cout << "Code is generated.\n";
+	PassManager pm;
+	pm.add(createPrintModulePass(&outs()));
+	pm.run(*module);
 }
+
+// GenericValue CodeGenContext::runCode() {
+// 	std::cout << "Running code...\n";
+// 	ExecutionEngine *ee = EngineBuilder(module).create();
+// 	vector<GenericValue> noargs;
+// 	GenericValue v = ee->runFunction(mainFunction, noargs);
+// 	std::cout << "Code was run.\n";
+// 	return v;
+// }
 Type *typeOf() 
 {
 		return Type::getInt64Ty(getGlobalContext());
@@ -118,12 +144,9 @@ Value* ASTProg::codegen(CodeGenContext &context) {
 	// call->dump();
 	/****************/
 
-	// FunctionType *ftype = FunctionType::get(Type::getVoidTy(getGlobalContext()), false);
-	// context.mainFunction = Function::Create(ftype, GlobalValue::InternalLinkage, "main", context.module);
-	// BasicBlock *bblock = BasicBlock::Create(getGlobalContext(), "entry", mainFunction, 0);
-	// context.mainFunction->dump();
 	field_decls->codegen(context);
 	stmt_decls->codegen(context);
+
 	return mainF;
 }
 Value *ASTIntLiteral::codegen(CodeGenContext &context) {
@@ -190,11 +213,28 @@ Value* ASTCallout::codegen(CodeGenContext& context) {
 	}
 
 	args->codegen(context);
+	ArrayRef<Type*>argTypesref = ArrayRef<Type*>(*argTypes);
 
+	/* Making Functions Declaration */
+
+	FunctionType *ftype = FunctionType::get(typeOf(), argTypesref, false);
+	Function *function = Function::Create(ftype, GlobalValue::InternalLinkage, methName.c_str(), context.module);
+
+	/********************************/
+
+	std::vector<class ASTCalloutarg *>argList = args->getArgsList();
+	Value **methargs = (Value **)malloc(argList.size() * sizeof(Value *));
+
+	for(i = 0; i<argList.size(); i++) {
+		methargs[i] = argList[i]->codegen(context);
+	}
+	ArrayRef<Value*> methargsref = ArrayRef<Value*>(*methargs);
+	CallInst *call = CallInst::Create(function, methargsref, "", context.currentBlock());	
+	
 	// vector <class ASTCalloutarg *> argList = args
 	// CallInst *call = CallInst::Create(function, args->getArgsList().begin(), args->getArgsList().end(), "", context.currentBlock());
 	// call->dump();
-	return 0;
+	return call;
 }
 Value* ASTAssign::codegen(CodeGenContext& context) {
 	// location->codegen(context);
@@ -236,19 +276,33 @@ ASTVar::ASTVar(string declType, string varName) {
 ASTFieldDecl::ASTFieldDecl(string dataType, class ASTVars *vars) {
 	this->dataType = dataType;
 	this->varList = vars->getVarList();
+	string dtype;
 	for(int i = 0; i<varList.size(); i++) {
 		varList[i]->setDataType(dataType);
+		
+		if( dataType.compare ("INT") == 0) {
+			dtype = "Integer";
+		}
+		else if( dataType.compare("BOOLEAN") == 0)
+			dtype = "Boolean";
+		else if( dataType.compare("CHARACTER") == 0 )
+			dtype = "Character";
+
+		allVars[varList[i]->getVarName()] = dtype;
+		// cout << varList[i]->getVarName() << " : " << allVars[varList[i]->getVarName()] << endl;
 	}
 }
 ASTAssign::ASTAssign(class ASTLocation *loc, class ASTExpr *expr) {
 	this->location = loc;
 	this->expr = expr;
+	checkDataTypes();
 }
 ASTLocation::ASTLocation(string loctype, string varName, class ASTExpr *expr) {
 	this->loctype = loctype;
 	this->varName = varName;
 	this->expr = expr;
 	this->etype = exprType::location;
+	checkIndexDataType();
 	//out << "1st Const. for Location called\n";
 
 }
@@ -279,11 +333,13 @@ ASTBinExpr::ASTBinExpr(class ASTExpr *left, string opertor, class ASTExpr *right
 	this->opertor = opertor;
 	this->right = right;
 	this->etype = exprType::binary;
+	this->getDataTypeExpr();
 }
 ASTUnExpr::ASTUnExpr(string opertor, class ASTExpr *expr) {
 	this->opertor = opertor;
 	this->expr = expr;
 	this->etype = exprType::unary;
+	this->getDataTypeExpr();
 }
 
 ASTProg::ASTProg(class ASTFieldDecls *field_decls, class ASTStmtDecls *stmt_decls) {
@@ -324,17 +380,86 @@ ASTInBuilt::ASTInBuilt(string methName, class ASTExprs *exprs) {
 }
 /****************************** AUXILLARY FUNCTIONS *******************************/
 
+string ASTBinExpr::getDataTypeExpr() {
+	
+	if(!(left->getDataTypeExpr().compare("Integer")) && !(right->getDataTypeExpr().compare("Integer")) )
+		return "Integer";
+	errors++;
+	fprintf(stderr, "Line %d: \x1b[31m Semantic Error (Incompatible Types) \x1b[0m:\n \x1b[31m %s \x1b[0m \n", yylineno, linebuf);
+	cout << "LHS : " << left->getDataTypeExpr() << " RHS : " << right->getDataTypeExpr() << endl;
+	return e;
+}
+string ASTUnExpr::getDataTypeExpr() {
+	// cout << "Operator: " << opertor << " VarType: " << expr->getDataTypeExpr() << endl;
+	if(!(expr->getDataTypeExpr().compare("Boolean")) && !opertor.compare("!")) {
+		s = "Boolean";
+		return s;
+	}
+	else if( !(expr->getDataTypeExpr().compare("Integer")) && !opertor.compare("-")) {
+		s = "Integer";
+		return s;
+	}
+	errors++;
+	fprintf(stderr, "Line %d: \x1b[31m Semantic Error (Incompatible Types) \x1b[0m:\n \x1b[31m %s \x1b[0m \n", yylineno, linebuf);
+	return e;
+}
+string ASTLocation::getDataTypeExpr() {
+	// cout << "Name Demanded for Varname " << varName << endl;
+	// cout << "DataType returned for " << varName << ": " << allVars[varName] << endl;
+	// cout << "DataType for " << varName << " : " << allVars[varName] << endl;
+	return allVars[varName];
+}
+string ASTParenExpr::getDataTypeExpr() {
+	return expr->getDataTypeExpr();
+}
+string ASTVar::getDataTypeExpr() {
+	// cout << "DataType for " << varName << " : " << allVars[varName] << endl;
+	return allVars[varName];
+}
+string ASTIntLiteral::getDataTypeExpr() {
+	return "Integer";
+}
+string ASTBoolLiteral::getDataTypeExpr() {
+	return "Boolean";
+}
+string ASTCharLiteral::getDataTypeExpr() {
+	return "Character";
+}
+string ASTString::getDataTypeExpr() {
+	return "String";
+}
+
 void ASTVar::setDataType(string dataType) {
 	this->dataType = dataType;
 }
 
 void ASTVars::push_back(class ASTVar *var) {
 	varList.push_back(var);
+	// cout << var->getDataType() << " : " << var->getVarName() << endl;
+}
+int ASTAssign::checkDataTypes() {
+	// cout << "Assignment LHS : " << location->getDataTypeExpr() << " RHS : " << expr->getDataTypeExpr() << endl;
+	if( location->getDataTypeExpr().compare(expr->getDataTypeExpr()) ) {
+		errors++;
+		fprintf(stderr, "Line %d: \x1b[31m Semantic Error (DataTypes for Assignment Invalid) \x1b[0m:\n \x1b[31m %s \x1b[0m \n", yylineno, linebuf);
+		return 0;
+	}
+	return 1;
+}
+int ASTLocation::checkIndexDataType() {
+	// cout << "Varname: " << varName << " Location: " << loctype << endl; //" Expr: " << expr->getDataTypeExpr() << endl;
+	if( !(expr->getDataTypeExpr().compare("Integer")) ) {  // Array is referenced by Integer only
+		return 1;
+	}
+	errors++;
+	fprintf(stderr, "Line %d: \x1b[31m Semantic Error (DataTypes for Array Indexing Invalid) \x1b[0m:\n \x1b[31m %s \x1b[0m \n", yylineno, linebuf);
+	return 0;
 }
 void ASTVars::push_back_vars(class ASTVars *vars) {
 	for(int i = 0; vars->varList.size(); i++) {
 		varList.push_back(vars->varList[i]);
 	}
+
 }
 vector <class ASTVar *> ASTVars::getVarList() {
 	return varList;
@@ -566,8 +691,6 @@ void ASTInBuilt::accept(Visitor *v)
 }
 
 void ASTBinExpr::traverse() {
-
-	// if(left->getData)
 
 	TAB;
 	out << "<binary_expression type=\"";

@@ -5,14 +5,16 @@
 #include <llvm/IR/Type.h>
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/LLVMContext.h>
-#include <llvm/IR/PassManager.h>
+#include <llvm/PassManager.h>
+#include <llvm/Target/TargetMachine.h>
+// #include <llvm/IR/PassManager.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/CallingConv.h>
 #include <llvm/Bitcode/ReaderWriter.h>
 #include <llvm/Analysis/Verifier.h>
 #include <llvm/Assembly/PrintModulePass.h>
 #include <llvm/IR/IRBuilder.h>
-//#include <llvm/ModuleProvider.h>
+#include <llvm/ModuleProvider.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/ExecutionEngine/GenericValue.h>
 #include <llvm/ExecutionEngine/JIT.h>
@@ -102,7 +104,7 @@ public:
     CodeGenContext() { module = new Module("main", getGlobalContext()); }
     
     void generateCode(class ASTNode *);
-    //GenericValue runCode();
+    // GenericValue runCode();
     std::map<std::string, Value*>& locals() { return blocks.top()->locals; }
     BasicBlock *currentBlock() { return blocks.top()->block; }
     void pushBlock(BasicBlock *block) { blocks.push(new CodeGenBlock()); blocks.top()->block = block; }
@@ -137,6 +139,8 @@ class ASTVar : public ASTNode{
 		void traverse();
 		void accept(Visitor *);
 		string getVarName() { return varName; }
+		string getDataType() {return dataType;}
+		string getDataTypeExpr();
 };
 class ASTVars : public ASTNode {
 	private:
@@ -191,6 +195,7 @@ class ASTExpr : virtual public ASTNode {
 		exprType etype;
 	public:
 		void setEtype(exprType x) { etype = x; }
+		virtual string getDataTypeExpr() {}
 		exprType getEtype() { return etype; }
 		virtual void traverse(){}
 		virtual string toString(){}
@@ -204,6 +209,7 @@ class ASTParenExpr: public ASTExpr {
 		ASTParenExpr(class ASTExpr *);
 		void traverse();
 		void accept(Visitor *);
+		string getDataTypeExpr();
 };
 class ASTMethCall: public ASTStmtDecl, public ASTExpr {
 	protected:
@@ -243,6 +249,8 @@ class ASTLocation: public ASTExpr {
 		void accept(Visitor *);
 		Value* codegen(CodeGenContext& );
 		string getVarName() { return varName; }
+		string getDataTypeExpr();
+		int checkIndexDataType();
 };	
 class ASTLiteral: public ASTExpr{
 	protected:
@@ -263,6 +271,7 @@ class ASTIntLiteral: public ASTLiteral {
 		string toString();
 		void accept(Visitor *);
 		virtual Value *codegen(CodeGenContext& );
+		string getDataTypeExpr();
 };
 class ASTCharLiteral: public ASTLiteral{
 	private:
@@ -273,6 +282,8 @@ class ASTCharLiteral: public ASTLiteral{
 		string toString();
 		//int getValue();
 		void accept(Visitor *);
+		string getDataTypeExpr();
+
 };
 class ASTBoolLiteral: public ASTLiteral {
 	private:
@@ -284,6 +295,8 @@ class ASTBoolLiteral: public ASTLiteral {
 		//int getValue();
 		void accept(Visitor *);
 		Value* codegen(CodeGenContext&);
+		string getDataTypeExpr();
+
 };
 class ASTString: public ASTLiteral {
 	private:
@@ -293,6 +306,8 @@ class ASTString: public ASTLiteral {
 		//string toString();
 		void traverse();
 		void accept(Visitor *);
+		string getDataTypeExpr();
+
 };
 class ASTBinExpr: public ASTExpr{
 	private:
@@ -305,6 +320,7 @@ class ASTBinExpr: public ASTExpr{
 		void traverse();
 		string toString();
 		void accept(Visitor *);
+		string getDataTypeExpr();
 };
 class ASTUnExpr: public ASTExpr {
 	private:
@@ -315,6 +331,7 @@ class ASTUnExpr: public ASTExpr {
 		void traverse();
 		// string toString();
 		void accept(Visitor *);
+		string getDataTypeExpr();
 };
 class ASTStmtDecls : public ASTNode{
 	private:
@@ -336,6 +353,7 @@ class ASTAssign: public ASTStmtDecl{
 		void traverse();
 		void accept(Visitor *);
 		Value* codegen(CodeGenContext&);
+		int checkDataTypes();
 };
 class ASTCalloutarg : public ASTNode {
 	private:
@@ -352,7 +370,7 @@ class ASTCalloutargs : public ASTNode {
 		vector <class ASTCalloutarg *> argList;
 		int count = 0;
 	public:
-		ASTCalloutargs();
+		ASTCalloutargs	();
 		void push_back(class ASTCalloutarg *);
 		void traverse();
 		void accept(Visitor *);
